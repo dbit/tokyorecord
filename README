@@ -1,0 +1,38 @@
+TOKYO RECORD
+
+The purpose of this project is to provide a nice object-oriented interface to Tokyo Cabinet, a dbm-like database.
+
+Each attribute gets mapped to 2 databases.  
+The FDB database indexes the attributes by integer ids.  
+The BDB databases is the mirror opposite of the FDB database in the sense the the attribute values used for hash keys while the integer ids are placed into the value position of (key, value).  This allows for fast search by value.
+
+Below is some sample data.  It should give you an idea of what the databases "look like."
+
+User.name.bdb
+David --> 1
+
+User.name.fdb
+1 --> David
+
+Post.title.bdb
+"Good morning." --> 100  # We could truncate keys to the first 30 letters so that hash keys don't get unwieldly.
+"Good evening." --> 101 
+
+Post.title.fdb
+
+post.id --> post.title
+100 --> "Good morning"
+101 --> "Good evening"
+# Keep in mind that two posts are pointing to the same user_id of 1.
+
+Post.user_id.bdb  # Again, this database is needed for joins.
+
+post.user_id --> post.id
+1 --> 100
+1 --> 101
+
+Post.user_id.fdb # This database is needed for fast look up by the posts's id.
+
+post.id --> post.user_id
+100 --> 1
+101 --> 1
