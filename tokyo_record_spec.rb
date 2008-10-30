@@ -2,6 +2,9 @@ require 'ftools'
 require 'tokyo_record'
 # If you're not used to doing tests with RSpec, try http://www.ibm.com/developerworks/web/library/wa-rspec/
 
+class NoSuchAttribute < Exception
+end
+
 describe TokyoRecord do
   
     before :each do
@@ -10,7 +13,7 @@ describe TokyoRecord do
       @user = User.new
     end
   
-    after :all do
+    after :each do
       # Remove all of the TC databases after all the tests are over.
       [ "User.id.fdb", 
         "Post.id.fdb",                     # `Id` attributes just keep track of the last insert id for each class.
@@ -27,11 +30,54 @@ describe TokyoRecord do
       end
     end
     
-    it "should not have any file handles when no properties are declared." do
-      @user.file_handles.should be_empty
+    describe "initial state when NOT declaring anything" do
+
+      it "should have created User.id.fdb file to track ids" do
+        File.exist?( "User.id.fdb" ).should be_true
+      end
+    
+      it "should have exactly one file handle when there haven't yet been any properties declared." do
+        @user.file_handles.size.should be_equal( 1 )
+      end
+    
+      it "should not, for example, have a User.name.bdb file on disk." do
+        File.exist?( "User.name.bdb" ).should be_false      
+      end
+    
+      it "should raise a NoSuchAttribute error if the attribute :name hasn't been declared yet and you try to create a persisted instance of the object." do
+        should_raise( NoSuchAttribute ){ User.create( :name => 'Dustin') }
+      end    
+    end
+    
+    describe "initial state when declaring a single attribute" do
+
+      before :each do
+        class User < TokyoRecord
+          attribute :name
+        end        
+      end
+
+      it "should not raise a NoSuchAttribute error if the attribute :name hasn't been declared yet and you try to create a persisted instance of the object." do
+        should_not_raise( NoSuchAttribute ){ User.create( :name => 'Dustin') }
+      end    
+      
+      it "should create a bdb file if the attribute has been declared." do
+        File.exist?( "User.name.bdb" ).should be_true
+      end
+      
+      it "should create an fdb file if the attribute has been declared" do
+        File.exist?( "User.name.fdb" ).should be_true
+      end 
+            
     end
 
-    describe "Subclassed instances with properties called 'name' and 'age'" do
+    describe "CREATE" do
+      before :each do
+        @user = User.create( :name => 'David' )
+      end
+    end
+
+    describe "Subclassed instances with properties called 'name' and 'age'." do
       
       before :each do
         class User < TokyoRecord
