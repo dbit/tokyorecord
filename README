@@ -7,32 +7,80 @@ The FDB database indexes the attributes by integer ids.
 The BDB databases is the mirror opposite of the FDB database in the sense the the attribute values used for hash keys while the integer ids are placed into the value position of (key, value).  This allows for fast search by value.
 
 Below is some sample data.  It should give you an idea of what the databases "look like."
+# class User < TokyoRecord
+# end
 
-User.name.bdb
-David --> 1
+User.id.fdb
+(empty)
+
+# @user = User.new
+# @user.save
+
+User.id.fdb
+1 --> 1
+
+# class User < TokyoRecord
+#   attributes :name
+# end
+#
+# @user2 = User.new
+# @user2.name = 'David'
+# @user2.save  # gets the next id from User.id.fdb, 2.
+
+User.name.bdb 
+"" --> 1
+David --> 2 
 
 User.name.fdb
-1 --> David
+1 --> ""
+2 --> David
 
-Post.title.bdb
+# Assume Post.id.fdb's next id is 100.
+#
+# class Post < TokyoRecord
+#   attributes :title
+# end
+#
+# @post = Post.new
+# @post.title = 'Good morning.'
+# @post.save  # gets the next id from Post.id.fdb, 100
+#
+# @post2 = Post.new
+# @post2.title = 'Good evening.'
+# @post2.save  # gets the next id from Post.id.fdb, 101
+
+
+# class Post < TokyoRecord
+#   attributes :title
+#   belongs_to :user
+# end
+
+In Post.title.bdb
+title --> id
 "Good morning." --> 100  # We could truncate keys to the first 30 letters so that hash keys don't get unwieldly.
 "Good evening." --> 101 
 
-Post.title.fdb
+In Post.title.fdb
+id --> title
+100 --> "Good morning."
+101 --> "Good evening."
 
-post.id --> post.title
-100 --> "Good morning"
-101 --> "Good evening"
-# Keep in mind that two posts are pointing to the same user_id of 1.
+# Post.new
+# @post = Post.new
+# @post.user = @user2
+# @post.user.save
 
-Post.user_id.bdb  # Again, this database is needed for joins.
+# @post2.user_id = 2
+# @post2.save
 
+# Keep in mind that two posts are pointing to the same user_id of 2.
+In Post.user_id.bdb 
 post.user_id --> post.id
-1 --> 100
-1 --> 101
+2 --> 100
+2 --> 101
 
-Post.user_id.fdb # This database is needed for fast look up by the posts's id.
-
+# This database is needed for fast look up by the posts's id.
+Post.user_id.fdb
 post.id --> post.user_id
-100 --> 1
-101 --> 1
+100 --> 2
+101 --> 2
