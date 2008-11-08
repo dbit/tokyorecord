@@ -1,22 +1,23 @@
+require 'rubygems'
+require 'spec/spec_helper'
 require 'ftools'
 require 'tokyo_record'
+
 # If you're not used to doing tests with RSpec, try http://www.ibm.com/developerworks/web/library/wa-rspec/
 
-class NoSuchAttribute < Exception
-end
-
-describe TokyoRecord do
+describe 'TokyoRecord module' do
   
     before :each do
-      class User < TokyoRecord
+      class User 
+        include TokyoRecord
       end
       @user = User.new
     end
   
     after :each do
       # Remove all of the TC databases after all the tests are over.
-      [ "User.id.fdb", 
-        "Post.id.fdb",                     # `Id` attributes just keep track of the last insert id for each class.
+      [ "User.id.bdb",
+        "Post.id.bdb",                     # `Id` attributes just keep track of the last insert id for each class.
                       "User.age.bdb", "User.age.fdb",         # Each non-`id` attribute has a bdb, for fast O(log n) searches by value, 
                       "User.name.bdb","User.name.fdb",        #   and an fdb for fast O(1) look-ups by id.
                       "Post.title.bdb","Post.title.fdb",
@@ -27,67 +28,114 @@ describe TokyoRecord do
         rescue => e
           # puts e
         end
+        TokyoRecord.close_all
       end
     end
-    
-    describe "initial state (of, for example, a User model) when NOT declaring anything" do
 
-      it "should have created User.id.fdb file to track ids" do
-        File.exist?( "User.id.fdb" ). should be_true
-      end
-    
-      it "should have exactly one file handle( User.id.fdb ) when there haven't yet been any properties declared." do
-        @user.file_handles.size. should be_equal( 1 )
-      end
-    
-      it "should not, for example, have a User.name.bdb file on disk." do
-        File.exist?( "User.name.bdb" ). should be_false      
-      end
-    
-      it "should raise a NoSuchAttribute error if the attribute 'name' hasn't been declared yet and you try to create a persisted instance of the object." do
-        begin 
-          User.create( :name => 'Dustin') 
-        end. should_raise( NoSuchAttribute )
-      end    
-      # @user = User.new
-      # @user.save
 
-      it "should have an next_id of 1" do
-        User.next_id. should == 1
-      end
-      
-      it "should create a new row with an id of 1 in User.id.fdb if an instance is saved." do
-        @user.save  # N.B. There is no persistence between RSpec tests.
-        User.next_id. should == 2
-      end
-      
-      it "should raise a NoSuchAttribute error if a non-existant attribute is attempted to be accessed" do
-        begin
-           @user.fudge
-        end. should_raise( NoSuchAttribute )
+  describe "internal functions:" do
+
+      describe "subclass_name" do
+          it "should return 'User'" do
+            @user.subclass_name.should be ==( 'User' )
+          end
+      end # subclass_name
+
+      describe "id_db_name" do
+          it "should return 'User.id.bdb'" do
+            @user.id_db_name.should be == 'User.id.bdb'
+          end
       end
 
-      it "should have a method that accesses its Tokyo id (tid), which is its row id in the database." do
-        @user. should respond_to?( 'tid' )
+      describe "self.id_db_name" do
+          it "should return 'User.id.bdb'" do 
+            User.id_db_name.should match( /User.id.bdb/ )        
+          end
       end
 
+      describe "after initialization," do
+
+          it "should create a file handle to User.id.bdb" do
+            @user.id_db.should be_an_instance_of( TokyoCabinet::BDB )
+          end
+
+          it "should write a file to disk called 'User.id.bdb'" do
+            File.exist?( "User.id.bdb" ). should be_true
+          end
+          
+      end  # after initialization
+  end # internal functions
+
+  describe "initial state (of, for example, a User model) when NOT declaring anything," do
+
+    it "should have exactly one file handle( User.id.bdb ) when there haven't yet been any properties declared." do
+      TokyoRecord.file_handles.size.to_i. should == ( 1 )
     end
-    
+
+    it "should not, for example, have a User.name.bdb file on disk." do
+      File.exist?( "User.name.bdb" ). should be_false      
+    end
+
+    it "should raise a NoSuchAttribute error if the attribute 'name' hasn't been declared yet and you try to create a persisted instance of the object." do
+      lambda {
+        User.create( :name => 'Dustin') 
+      }. should raise_error( NoSuchAttribute )
+    end    
+
+    it "should raise a NoSuchAttribute error if a non-existant attribute is attempted to be accessed" do
+      begin
+         @user.fudge
+      end. should raise_error( NoSuchAttribute )
+    end
+
+  end # describe initial state
+
+  describe "tokyo ids" do
+
+    it "should be nil if not saved yet." do
+      @user.tid.should be_nil( 'tid' )
+    end      
+
+    it "should have a next_id of 1" do
+      User.next_id. should == 1
+    end
+
+    it "should have a positive integer tid after it is saved." do
+      @user.save
+      @user.tid. should be == 1
+    end
+
+    it "should create a new row with an id of 1 in User.id.bdb if an instance is saved." do
+      @user.save  # N.B. There is no persistence between RSpec tests.
+      User.next_id. should == 2
+    end
+
+  end # tokyo ids
+
+  describe "declaring a single attribute called 'name'" do
+
+    before :each do
+      class User 
+        include TokyoRecord
+        attributes :name
+      end
+      @user = User.new
+    end
+
+    it "should not raise a NoSuchAttribute error if the attribute 'name' has been declared already and if you try to create a persistent instance of the object." do
+      begin 
+        @user.name = 'Dustin'
+        @user.save
+      end. should_not_raise( NoSuchAttribute )
+    end    
+
+  end # 'declaring a single attribute'
+end # TokyoRecord module
+=begin
+
     describe "declaring a single attribute called 'name'" do
 
-      before :each do
-        class User < TokyoRecord
-          attribute :name
-        end
-        @user = User.new
-      end
-
-      it "should not raise a NoSuchAttribute error if the attribute 'name' has been declared already and if you try to create a persistent instance of the object." do
-        begin 
-          User.create( {:name => 'Dustin'} ) 
-        end. should_not_raise( NoSuchAttribute )
-      end    
-      
+=begin      
       it "should create a bdb file if the attribute has been declared." do
         File.exist?( "User.name.bdb" ). should be_true
       end
@@ -136,7 +184,8 @@ describe TokyoRecord do
     describe "Subclassed instances with properties called 'name' and 'age'." do
       
       before :each do
-        class User < TokyoRecord
+        class User 
+          include TokyoRecord
           attributes :name, :age
         end
         @user = User.new
@@ -154,11 +203,6 @@ describe TokyoRecord do
         @user.tid. should be_null 
       end
       
-      it "should have a positive integer tid after it is saved." do
-        @user.name = 'David'
-        @user.save
-        @user.tid. should be > 0
-      end
 
       it "should not store the attribute in the database before you call save." do
         @user.name = 'David'
@@ -186,7 +230,8 @@ describe TokyoRecord do
       # Find_by_attribute
       
       before :each do
-        class User < TokyoRecord
+        class User 
+          include TokyoRecord
           attributes :name
         end
         User.create( :name => 'Beckwith', :age => 36)
@@ -260,13 +305,15 @@ describe TokyoRecord do
     describe "Inter-model relationships" do
 
       before :each do
-        class User < TokyoRecord
+        class User 
+          include TokyoRecord
           attributes :name
           has_many :post
         end
         @user = User.create( :name => 'David')
 
-        class Post < TokyoRecord
+        class Post 
+          include TokyoRecord
           attributes :title
           belongs_to :user
         end
@@ -298,7 +345,8 @@ describe TokyoRecord do
     describe "when 2 attributes of the same model don't have differentnumbers of rows" do
   
       before :each do
-        class User < TokyoRecord
+        class User 
+          include TokyoRecord
           attributes :name, :age
         end
         User.create( :name => 'David', :age => 36)
@@ -336,5 +384,4 @@ describe TokyoRecord do
         TokyoRecord. should be_completely_closed
       end
     end
-    
-end
+=end 
